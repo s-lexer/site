@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Chat</title>
+    <style>
+        /* Базовые стили для чата */
+        body { font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; background-color: #282c34; color: #fff; }
+        #chat-window { flex-grow: 1; padding: 20px; overflow-y: auto; }
+        #chat-input { display: flex; padding: 10px; background-color: #21252b; }
+        #message-input { flex-grow: 1; padding: 10px; border: none; border-radius: 5px 0 0 5px; background-color: #3b4049; color: #fff; }
+        #send-button { padding: 10px 20px; border: none; background-color: #61afef; color: white; cursor: pointer; border-radius: 0 5px 5px 0; }
+        .message { margin-bottom: 10px; padding: 8px; border-radius: 5px; max-width: 80%; }
+        .user { background-color: #4a515e; margin-left: auto; text-align: right; }
+        .bot { background-color: #3b4049; margin-right: auto; text-align: left; }
+    </style>
+</head>
+<body>
+
+    <div id="chat-window">
+        <div class="message bot">Привет! Я чат-бот на базе Gemini. Как я могу вам помочь?</div>
+    </div>
+
+    <div id="chat-input">
+        <input type="text" id="message-input" placeholder="Напишите ваше сообщение...">
+        <button id="send-button">Отправить</button>
+    </div>
+
+    <script>
+        // *** 1. Замените этот URL на ваш рабочий URL WebHook из n8n ***
+        const WEBHOOK_URL = "ЗАМЕНИТЕ_НА_ВАШ_N8N_WEBHOOK_URL"; 
+        
+        const chatWindow = document.getElementById('chat-window');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+
+        // Функция для отображения сообщений
+        function displayMessage(text, sender) {
+            const msgDiv = document.createElement('div');
+            msgDiv.classList.add('message', sender);
+            msgDiv.innerText = text;
+            chatWindow.appendChild(msgDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight; // Прокрутка вниз
+        }
+
+        // Функция для отправки запроса
+        async function sendMessage() {
+            const userMessage = messageInput.value.trim();
+            if (!userMessage) return;
+
+            // 1. Отображаем сообщение пользователя
+            displayMessage(userMessage, 'user');
+            messageInput.value = '';
+            sendButton.disabled = true; // Блокируем кнопку на время запроса
+            
+            // Добавляем сообщение о загрузке
+            const loadingMsg = document.createElement('div');
+            loadingMsg.classList.add('message', 'bot');
+            loadingMsg.innerText = 'Печатаю...';
+            loadingMsg.id = 'loading-indicator';
+            chatWindow.appendChild(loadingMsg);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+
+            try {
+                // 2. Отправляем запрос на WebHook n8n
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // Убедитесь, что имя поля совпадает с тем, которое вы извлекаете в n8n (Шаг 2)
+                    body: JSON.stringify({ user_message: userMessage }) 
+                });
+
+                const data = await response.json();
+                
+                // 3. Удаляем индикатор загрузки
+                document.getElementById('loading-indicator').remove(); 
+
+                // 4. Отображаем ответ от Gemini (из поля 'answer', которое вы создали в Шаге 4 n8n)
+                if (data && data.answer) {
+                    displayMessage(data.answer, 'bot');
+                } else {
+                    displayMessage("Ошибка: Не удалось получить ответ.", 'bot');
+                }
+
+            } catch (error) {
+                console.error('Ошибка при отправке запроса:', error);
+                document.getElementById('loading-indicator').remove(); 
+                displayMessage("Произошла ошибка сети или API.", 'bot');
+            } finally {
+                sendButton.disabled = false;
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+
+</body>
+</html>
